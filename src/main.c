@@ -17,12 +17,30 @@
 #include <stdio.h>
 #include <string.h>
 
+/* ============================================================
+   HISTORY: متغيرات عشان نحفظ الأوامر القديمة
+   ============================================================ */
+#define HISTORY_SIZE 100
+char *history_list[HISTORY_SIZE];
+int history_count = 0;
+
+void history_add(char *line) {
+  if (history_count < HISTORY_SIZE) {
+    history_list[history_count] = strdup(line);
+    history_count++;
+  }
+}
+
 /*
   Function Declarations for builtin shell commands:
  */
 int lsh_cd(char **args);
 int lsh_help(char **args);
 int lsh_exit(char **args);
+int lsh_pwd(char **args);
+int lsh_echo(char **args);
+int lsh_history(char **args);
+int lsh_env(char **args);
 
 /*
   List of builtin commands, followed by their corresponding functions.
@@ -30,13 +48,21 @@ int lsh_exit(char **args);
 char *builtin_str[] = {
   "cd",
   "help",
-  "exit"
+  "exit",
+  "pwd",
+  "echo",
+  "history",
+  "env"
 };
 
 int (*builtin_func[]) (char **) = {
   &lsh_cd,
   &lsh_help,
-  &lsh_exit
+  &lsh_exit,
+  &lsh_pwd,
+  &lsh_echo,
+  &lsh_history,
+  &lsh_env
 };
 
 int lsh_num_builtins() {
@@ -92,6 +118,84 @@ int lsh_help(char **args)
 int lsh_exit(char **args)
 {
   return 0;
+}
+
+/**
+   @brief Builtin command: print current working directory.
+   @param args List of args. Not examined.
+   @return Always returns 1, to continue executing.
+ */
+int lsh_pwd(char **args)
+{
+  char cwd[1024];
+  if (getcwd(cwd, sizeof(cwd)) != NULL) {
+    printf("%s\n", cwd);
+  } else {
+    perror("lsh: pwd");
+  }
+  return 1;
+}
+
+/**
+   @brief Builtin command: print arguments to stdout.
+   @param args List of args. args[0] is "echo".
+   @return Always returns 1, to continue executing.
+ */
+int lsh_echo(char **args)
+{
+  int i = 1;
+
+  if (args[1] == NULL) {
+    printf("\n");
+    return 1;
+  }
+
+  while (args[i] != NULL) {
+    printf("%s", args[i]);
+    if (args[i + 1] != NULL) {
+      printf(" ");
+    }
+    i++;
+  }
+  printf("\n");
+  return 1;
+}
+
+/**
+   @brief Builtin command: print command history.
+   @param args List of args. Not examined.
+   @return Always returns 1, to continue executing.
+ */
+int lsh_history(char **args)
+{
+  int i;
+
+  if (history_count == 0) {
+    printf("No commands in history.\n");
+    return 1;
+  }
+
+  for (i = 0; i < history_count; i++) {
+    printf("%d  %s\n", i + 1, history_list[i]);
+  }
+  return 1;
+}
+
+/**
+   @brief Builtin command: print all environment variables.
+   @param args List of args. Not examined.
+   @return Always returns 1, to continue executing.
+ */
+int lsh_env(char **args)
+{
+  extern char **environ;
+  int i = 0;
+
+  while (environ[i] != NULL) {
+    printf("%s\n", environ[i]);
+    i++;
+  }
+  return 1;
 }
 
 /**
@@ -232,7 +336,7 @@ char **lsh_split_line(char *line)
       tokens_backup = tokens;
       tokens = realloc(tokens, bufsize * sizeof(char*));
       if (!tokens) {
-		free(tokens_backup);
+        free(tokens_backup);
         fprintf(stderr, "lsh: allocation error\n");
         exit(EXIT_FAILURE);
       }
@@ -256,6 +360,7 @@ void lsh_loop(void)
   do {
     printf("> ");
     line = lsh_read_line();
+    history_add(line);       /* احفظ كل أمر في الـ history */
     args = lsh_split_line(line);
     status = lsh_execute(args);
 
@@ -281,4 +386,3 @@ int main(int argc, char **argv)
 
   return EXIT_SUCCESS;
 }
-
